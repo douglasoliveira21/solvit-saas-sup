@@ -1,0 +1,38 @@
+# Django e Django REST Framework
+Django==4.2.7
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.0
+django-cors-headers==4.3.1
+
+# Token blacklist para JWT
+rest-framework-simplejwt[crypto]==5.3.0
+
+# Microsoft Graph SDK
+msgraph-core==0.2.2
+msgraph-sdk==1.0.0
+azure-identity==1.15.0
+
+# Banco de dados
+psycopg2-binary==2.9.9
+
+# Utilitários
+requests==2.31.0
+python-decouple==3.8
+celery==5.3.4
+redis==5.0.1
+
+# Logs e monitoramento
+django-extensions==3.2.3
+django-debug-toolbar==4.2.0
+
+# Segurança
+cryptography==41.0.7
+
+# Produção
+gunicorn==21.2.0
+whitenoise==6.6.0
+
+# Desenvolvimento
+pytest==7.4.3
+pytest-django==4.7.0
+factory-boy==3.3.0
