@@ -5,7 +5,7 @@ djangorestframework-simplejwt==5.3.0
 django-cors-headers==4.3.1
 
 # Token blacklist para JWT
-rest-framework-simplejwt[crypto]==5.3.0
+djangorestframework-simplejwt[crypto]==5.3.0
 
 # Microsoft Graph SDK
 msgraph-core==0.2.2
