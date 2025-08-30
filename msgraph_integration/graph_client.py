@@ -28,7 +28,7 @@ class MicrosoftGraphClient:
         self.config = config
         self.client_id = config.client_id
         self.client_secret = config.get_decrypted_client_secret()
-        self.tenant_id = config.tenant_id
+        self.tenant_id = config.azure_tenant_id
         self._access_token = None
         self._token_expires_at = None
     
