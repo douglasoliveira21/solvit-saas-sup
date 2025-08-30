@@ -15,19 +15,28 @@ export interface CreateGroupRequest {
 }
 
 // User types
+export interface UserTenant {
+  id: number;
+  name: string;
+  slug: string;
+  role: string;
+  is_active: boolean;
+}
+
 export interface User {
   id: string;
+  username: string;
   email: string;
   first_name: string;
   last_name: string;
-  is_active: boolean;
-  is_staff: boolean;
+  is_active?: boolean;
+  is_staff?: boolean;
   date_joined: string;
   last_login?: string;
-  tenant: string;
+  tenants: UserTenant[];
   ad_username?: string;
   ad_guid?: string;
-  groups: Group[];
+  groups?: Group[];
 }
 
 export interface CreateUserRequest {
@@ -117,6 +126,7 @@ export interface AuthUser {
   last_name: string;
   is_staff: boolean;
   tenant: Tenant;
+  tenants: UserTenant[];
 }
 
 // API types

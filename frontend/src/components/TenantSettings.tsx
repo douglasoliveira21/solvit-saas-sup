@@ -203,7 +203,8 @@ export const TenantSettings: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.get(`/api/tenants/tenant-settings/?tenant=${user?.tenant?.id}`);
+      const primaryTenant = user?.tenants?.[0];
+      const response = await apiClient.get(`/api/tenants/tenant-settings/?tenant=${primaryTenant?.id?.toString()}`);
       setSettings(response.results?.[0] || getDefaultSettings());
     } catch (err) {
       setError('Erro ao carregar configurações');
@@ -215,7 +216,7 @@ export const TenantSettings: React.FC = () => {
 
   const getDefaultSettings = (): TenantSettingsType => ({
     id: '',
-    tenant: user?.tenant?.id || '',
+    tenant: user?.tenants?.[0]?.id?.toString() || '',
     password_min_length: 8,
     password_require_uppercase: true,
     password_require_lowercase: true,

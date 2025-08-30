@@ -46,10 +46,7 @@ export default function TenantSettingsPage() {
 
   return (
     <div className="container mx-auto py-6">
-      <TenantSettings 
-        tenantId={user.tenant.id} 
-        tenantName={user.tenant.name}
-      />
+      <TenantSettings />
     </div>
   );
 }

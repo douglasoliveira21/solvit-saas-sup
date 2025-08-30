@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import * as Types from '../types';
 
 type AuthUser = Types.AuthUser;
@@ -46,7 +46,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           first_name: currentUser.first_name,
           last_name: currentUser.last_name,
           is_staff: currentUser.is_staff,
-          tenant: currentUser.tenant as any, // Type assertion for now
+          tenant: currentUser.tenants && currentUser.tenants.length > 0 ? {
+            id: currentUser.tenants[0].id.toString(),
+            name: currentUser.tenants[0].name,
+            domain: currentUser.tenants[0].slug,
+            is_active: currentUser.tenants[0].is_active ?? true,
+            created_at: '',
+            settings: {} as any
+          } : null as any,
         });
       }
     } catch (error) {
@@ -73,7 +80,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         first_name: response.user.first_name,
         last_name: response.user.last_name,
         is_staff: response.user.is_staff,
-        tenant: response.user.tenant as any, // Type assertion for now
+        tenant: response.user.tenants && response.user.tenants.length > 0 ? {
+           id: response.user.tenants[0].id.toString(),
+           name: response.user.tenants[0].name,
+           domain: response.user.tenants[0].slug,
+           is_active: response.user.tenants[0].is_active ?? true,
+           created_at: '',
+           settings: {} as any
+         } : null as any,
       });
     } catch (error) {
       throw error;

@@ -102,7 +102,7 @@ function Test-Prerequisites {
     try {
         $dotnetVersion = dotnet --version 2>$null
         if ($dotnetVersion -and $dotnetVersion.StartsWith("6.")) {
-            Write-Host "✓ .NET 6 Runtime found: $dotnetVersion" -ForegroundColor Green
+            Write-Host "[OK] .NET 6 Runtime found: $dotnetVersion" -ForegroundColor Green
         } else {
             $errors += ".NET 6 Runtime not found or incorrect version"
         }
@@ -112,7 +112,7 @@ function Test-Prerequisites {
     
     # Check PowerShell version
     if ($PSVersionTable.PSVersion.Major -ge 5) {
-        Write-Host "✓ PowerShell version: $($PSVersionTable.PSVersion)" -ForegroundColor Green
+        Write-Host "[OK] PowerShell version: $($PSVersionTable.PSVersion)" -ForegroundColor Green
     } else {
         $errors += "PowerShell 5.0 or higher required"
     }
@@ -121,7 +121,7 @@ function Test-Prerequisites {
     try {
         $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain()
         if ($domain.Name -eq $DomainName) {
-            Write-Host "✓ Domain accessible: $($domain.Name)" -ForegroundColor Green
+            Write-Host "[OK] Domain accessible: $($domain.Name)" -ForegroundColor Green
         } else {
             Write-Warning "Current domain ($($domain.Name)) differs from specified domain ($DomainName)"
         }
@@ -133,7 +133,7 @@ function Test-Prerequisites {
     try {
         $response = Invoke-WebRequest -Uri "$BackendUrl/api/health/" -Method GET -TimeoutSec 10 -UseBasicParsing
         if ($response.StatusCode -eq 200) {
-            Write-Host "✓ Backend API accessible: $BackendUrl" -ForegroundColor Green
+            Write-Host "[OK] Backend API accessible: $BackendUrl" -ForegroundColor Green
         } else {
             $errors += "Backend API returned status: $($response.StatusCode)"
         }
@@ -153,7 +153,7 @@ function Test-Prerequisites {
         $result = $searcher.FindOne()
         
         if ($result) {
-            Write-Host "✓ Service account credentials validated" -ForegroundColor Green
+            Write-Host "[OK] Service account credentials validated" -ForegroundColor Green
         } else {
             $errors += "Service account credentials validation failed"
         }
@@ -162,14 +162,14 @@ function Test-Prerequisites {
     }
     
     if ($errors.Count -gt 0) {
-        Write-Host "\n❌ Prerequisites validation failed:" -ForegroundColor Red
+        Write-Host "\n[ERROR] Prerequisites validation failed:" -ForegroundColor Red
         foreach ($error in $errors) {
             Write-Host "   • $error" -ForegroundColor Red
         }
         return $false
     }
     
-    Write-Host "\n✅ All prerequisites validated successfully" -ForegroundColor Green
+    Write-Host "\n[SUCCESS] All prerequisites validated successfully" -ForegroundColor Green
     return $true
 }
 
@@ -281,7 +281,7 @@ function New-ConfigurationFile {
     $configJson = $config | ConvertTo-Json -Depth 10
     $configJson | Out-File -FilePath $ConfigPath -Encoding UTF8
     
-    Write-Host "✓ Configuration file created: $ConfigPath" -ForegroundColor Green
+    Write-Host "[OK] Configuration file created: $ConfigPath" -ForegroundColor Green
 }
 
 function Install-Agent {
@@ -366,7 +366,7 @@ function Install-Agent {
         $serviceStatus = Get-Service -Name $ServiceName
         
         if ($serviceStatus.Status -eq "Running") {
-            Write-Host "\n✅ Service installed and started successfully!" -ForegroundColor Green
+            Write-Host "\n[SUCCESS] Service installed and started successfully!" -ForegroundColor Green
             Write-Host "Service Status: $($serviceStatus.Status)" -ForegroundColor Green
         } else {
             Write-Warning "Service installed but not running. Status: $($serviceStatus.Status)"
@@ -390,9 +390,9 @@ function Test-AgentHealth {
     # Check service status
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($service -and $service.Status -eq "Running") {
-        $healthChecks += @{ Name = "Service Status"; Status = "✓ Running"; Color = "Green" }
+        $healthChecks += @{ Name = "Service Status"; Status = "[OK] Running"; Color = "Green" }
     } else {
-        $healthChecks += @{ Name = "Service Status"; Status = "❌ Not Running"; Color = "Red" }
+        $healthChecks += @{ Name = "Service Status"; Status = "[ERROR] Not Running"; Color = "Red" }
     }
     
     # Check log files
@@ -401,20 +401,20 @@ function Test-AgentHealth {
         $logFiles = Get-ChildItem -Path $logPath -Filter "*.log" | Sort-Object LastWriteTime -Descending
         if ($logFiles.Count -gt 0) {
             $latestLog = $logFiles[0]
-            $healthChecks += @{ Name = "Log Files"; Status = "✓ Latest: $($latestLog.Name) ($($latestLog.LastWriteTime))"; Color = "Green" }
+            $healthChecks += @{ Name = "Log Files"; Status = "[OK] Latest: $($latestLog.Name) ($($latestLog.LastWriteTime))"; Color = "Green" }
         } else {
-            $healthChecks += @{ Name = "Log Files"; Status = "⚠ No log files found"; Color = "Yellow" }
+            $healthChecks += @{ Name = "Log Files"; Status = "[WARNING] No log files found"; Color = "Yellow" }
         }
     } else {
-        $healthChecks += @{ Name = "Log Files"; Status = "❌ Log directory not found"; Color = "Red" }
+        $healthChecks += @{ Name = "Log Files"; Status = "[ERROR] Log directory not found"; Color = "Red" }
     }
     
     # Check configuration file
     $configPath = Join-Path $InstallPath "appsettings.json"
     if (Test-Path $configPath) {
-        $healthChecks += @{ Name = "Configuration"; Status = "✓ Found"; Color = "Green" }
+        $healthChecks += @{ Name = "Configuration"; Status = "[OK] Found"; Color = "Green" }
     } else {
-        $healthChecks += @{ Name = "Configuration"; Status = "❌ Missing"; Color = "Red" }
+        $healthChecks += @{ Name = "Configuration"; Status = "[ERROR] Missing"; Color = "Red" }
     }
     
     # Display health check results
@@ -432,7 +432,7 @@ try {
     }
     
     if ($ValidateOnly) {
-        Write-Host "\n✅ Validation completed successfully. Ready for deployment." -ForegroundColor Green
+        Write-Host "\n[SUCCESS] Validation completed successfully. Ready for deployment." -ForegroundColor Green
         exit 0
     }
     
@@ -453,9 +453,9 @@ try {
         Write-Host "3. Verify synchronization in the SaaS platform" -ForegroundColor White
         Write-Host "4. Configure firewall rules if needed" -ForegroundColor White
         
-        Write-Host "\n✅ Deployment completed successfully!" -ForegroundColor Green
+        Write-Host "\n[SUCCESS] Deployment completed successfully!" -ForegroundColor Green
     } else {
-        Write-Host "\n❌ Deployment failed!" -ForegroundColor Red
+        Write-Host "\n[ERROR] Deployment failed!" -ForegroundColor Red
         exit 1
     }
     
