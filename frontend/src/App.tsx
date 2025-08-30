@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import UserManagement from './pages/UserManagement';
 import GroupManagement from './pages/GroupManagement';
 import AuditLogs from './pages/AuditLogs';
+import TenantSettingsPage from './pages/TenantSettingsPage';
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="users" element={<UserManagement />} />
             <Route path="groups" element={<GroupManagement />} />
             <Route path="audit" element={<AuditLogs />} />
+            <Route path="tenant-settings" element={<TenantSettingsPage />} />
           </Route>
           
           {/* Catch all route */}

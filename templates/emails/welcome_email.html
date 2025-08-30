@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bem-vindo ao {{ tenant_name }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #4f46e5;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .content {
+            background-color: #f9fafb;
+            padding: 30px;
+            border-radius: 0 0 8px 8px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4f46e5;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Bem-vindo ao {{ tenant_name }}!</h1>
+    </div>
+    
+    <div class="content">
+        <h2>Olá, {{ user_name }}!</h2>
+        
+        <p>É com grande prazer que damos as boas-vindas ao <strong>{{ tenant_name }}</strong>!</p>
+        
+        <p>Sua conta foi criada com sucesso e você já pode começar a usar nossa plataforma de gerenciamento de identidade.</p>
+        
+        <p>Para fazer login, clique no botão abaixo:</p>
+        
+        <div style="text-align: center;">
+            <a href="{{ login_url }}" class="button">Fazer Login</a>
+        </div>
+        
+        <p>Ou copie e cole este link no seu navegador:</p>
+        <p style="word-break: break-all; background-color: #e5e7eb; padding: 10px; border-radius: 4px;">{{ login_url }}</p>
+        
+        <h3>O que você pode fazer:</h3>
+        <ul>
+            <li>Gerenciar seu perfil e informações pessoais</li>
+            <li>Acessar aplicações integradas</li>
+            <li>Visualizar logs de auditoria</li>
+            <li>Participar de grupos e equipes</li>
+        </ul>
+        
+        <p>Se você tiver alguma dúvida ou precisar de ajuda, não hesite em entrar em contato conosco.</p>
+    </div>
+    
+    <div class="footer">
+        <p>Este email foi enviado automaticamente pelo sistema {{ tenant_name }}.</p>
+        <p>Se precisar de suporte, entre em contato: <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+    </div>
+</body>
+</html>

@@ -1,5 +1,37 @@
 from rest_framework import serializers
-from .models import AuditLog, SystemConfiguration, APIKey
+from .models import (
+    Tenant, TenantUser, AuditLog, SystemConfiguration, APIKey, 
+    ManagedUser, ManagedGroup, GroupMembership, ADConfiguration, M365Configuration
+)
+
+
+class TenantSerializer(serializers.ModelSerializer):
+    """Serializer para tenants"""
+    
+    class Meta:
+        model = Tenant
+        fields = [
+            'id', 'name', 'slug', 'domain', 'contact_name', 'contact_email',
+            'contact_phone', 'is_active', 'has_ad_integration', 'has_m365_integration',
+            'settings', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class TenantUserSerializer(serializers.ModelSerializer):
+    """Serializer para associações de usuários a tenants"""
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    
+    class Meta:
+        model = TenantUser
+        fields = [
+            'id', 'tenant', 'tenant_name', 'user', 'user_name', 'user_email',
+            'role', 'role_display', 'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
@@ -103,3 +135,112 @@ class CreateAuditLogSerializer(serializers.ModelSerializer):
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip
+
+
+class ManagedUserSerializer(serializers.ModelSerializer):
+    """Serializer para usuários gerenciados"""
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+    source_display = serializers.CharField(source='get_source_display', read_only=True)
+    sync_status_display = serializers.CharField(source='get_sync_status_display', read_only=True)
+    groups_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ManagedUser
+        fields = [
+            'id', 'tenant', 'tenant_name', 'username', 'email', 'first_name',
+            'last_name', 'display_name', 'is_active', 'external_id', 'source',
+            'source_display', 'last_synced_at', 'sync_enabled', 'sync_status',
+            'sync_status_display', 'sync_error_message', 'groups_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'last_synced_at']
+    
+    def get_groups_count(self, obj):
+        """Retorna o número de grupos do usuário"""
+        return GroupMembership.objects.filter(user=obj).count()
+
+
+class ManagedGroupSerializer(serializers.ModelSerializer):
+    """Serializer para grupos gerenciados"""
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+    source_display = serializers.CharField(source='get_source_display', read_only=True)
+    sync_status_display = serializers.CharField(source='get_sync_status_display', read_only=True)
+    group_type_display = serializers.CharField(source='get_group_type_display', read_only=True)
+    members_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ManagedGroup
+        fields = [
+            'id', 'tenant', 'tenant_name', 'name', 'description', 'is_active',
+            'external_id', 'source', 'source_display', 'group_type', 'group_type_display',
+            'last_synced_at', 'sync_enabled', 'sync_status', 'sync_status_display',
+            'sync_error_message', 'members_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'last_synced_at']
+    
+    def get_members_count(self, obj):
+        """Retorna o número de membros do grupo"""
+        return GroupMembership.objects.filter(group=obj).count()
+
+
+class GroupMembershipSerializer(serializers.ModelSerializer):
+    """Serializer para associações de usuários a grupos"""
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    user_display_name = serializers.CharField(source='user.display_name', read_only=True)
+    group_name = serializers.CharField(source='group.name', read_only=True)
+    
+    class Meta:
+        model = GroupMembership
+        fields = [
+            'id', 'group', 'group_name', 'user', 'user_username', 'user_display_name',
+            'added_at', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'added_at', 'created_at', 'updated_at']
+
+
+class ADConfigurationSerializer(serializers.ModelSerializer):
+    """Serializer para configurações do Active Directory"""
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+    agent_status_display = serializers.CharField(source='get_agent_status_display', read_only=True)
+    last_sync_status_display = serializers.CharField(source='get_last_sync_status_display', read_only=True)
+    
+    class Meta:
+        model = ADConfiguration
+        fields = [
+            'id', 'tenant', 'tenant_name', 'domain_controller', 'domain_name',
+            'base_dn', 'service_account_username', 'service_account_password',
+            'sync_enabled', 'sync_interval_minutes', 'sync_users', 'sync_groups',
+            'users_ou', 'groups_ou', 'agent_status', 'agent_status_display',
+            'agent_last_seen', 'agent_version', 'last_sync_at', 'last_sync_status',
+            'last_sync_status_display', 'last_sync_message', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'agent_last_seen', 'agent_version', 'last_sync_at', 
+            'last_sync_status', 'last_sync_message', 'created_at', 'updated_at'
+        ]
+        extra_kwargs = {
+            'service_account_password': {'write_only': True}
+        }
+
+
+class M365ConfigurationSerializer(serializers.ModelSerializer):
+    """Serializer para configurações do Microsoft 365"""
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+    last_sync_status_display = serializers.CharField(source='get_last_sync_status_display', read_only=True)
+    
+    class Meta:
+        model = M365Configuration
+        fields = [
+            'id', 'tenant', 'tenant_name', 'azure_tenant_id', 'client_id',
+            'client_secret', 'redirect_uri', 'sync_enabled', 'sync_interval_minutes',
+            'sync_users', 'sync_groups', 'user_filter', 'group_filter',
+            'last_sync_at', 'last_sync_status', 'last_sync_status_display',
+            'last_sync_message', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'last_sync_at', 'last_sync_status', 'last_sync_message',
+            'created_at', 'updated_at'
+        ]
+        extra_kwargs = {
+            'client_secret': {'write_only': True}
+        }

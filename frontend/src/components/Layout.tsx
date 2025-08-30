@@ -9,6 +9,7 @@ import {
   UserCheck,
   FileText,
   Settings,
+  Building2,
   LogOut,
   ChevronDown,
   Bell,
@@ -28,6 +29,7 @@ const navigation: NavigationItem[] = [
   { name: 'Usuários', href: '/users', icon: Users },
   { name: 'Grupos', href: '/groups', icon: UserCheck },
   { name: 'Auditoria', href: '/audit', icon: FileText },
+  { name: 'Configurações do Tenant', href: '/tenant-settings', icon: Building2 },
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
 

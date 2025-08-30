@@ -49,115 +49,37 @@ class M365IntegrationViewSet(viewsets.ViewSet):
             )
         
         try:
+            config = M365Configuration.objects.get(tenant=tenant)
             sync_service = M365SyncService(tenant)
+            
+            # Testa a conexão
             result = sync_service.test_connection()
             
+            if result['success']:
+                config.last_sync_status = 'SUCCESS'
+                config.last_sync_message = 'Conexão testada com sucesso'
+            else:
+                config.last_sync_status = 'ERROR'
+                config.last_sync_message = result.get('error', 'Erro desconhecido')
+            
+            config.save()
+            
             return Response(result)
             
-        except ValueError as e:
+        except M365Configuration.DoesNotExist:
             return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Configuração M365 não encontrada para este tenant'},
+                status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            logger.error(f"Erro no teste de conexão M365: {e}")
+            logger.error(f"Erro ao testar conexão M365: {str(e)}")
             return Response(
-                {'error': 'Erro interno do servidor'},
+                {'error': f'Erro interno: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=False, methods=['post'])
-    def sync_user(self, request):
-        """Sincroniza um usuário específico com M365"""
-        tenant = self.get_tenant_from_request()
-        user_id = request.data.get('user_id')
-        operation = request.data.get('operation', 'create')
-        
-        if not tenant:
-            return Response(
-                {'error': 'Tenant não encontrado ou acesso negado'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not user_id:
-            return Response(
-                {'error': 'ID do usuário é obrigatório'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if operation not in ['create', 'update', 'disable', 'enable']:
-            return Response(
-                {'error': 'Operação inválida. Use: create, update, disable, enable'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            managed_user = get_object_or_404(ManagedUser, id=user_id, tenant=tenant)
-            sync_service = M365SyncService(tenant)
-            
-            result = sync_service.sync_user_to_m365(managed_user, operation)
-            
-            return Response(result)
-            
-        except ValueError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            logger.error(f"Erro na sincronização do usuário: {e}")
-            return Response(
-                {'error': 'Erro interno do servidor'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    @action(detail=False, methods=['post'])
-    def sync_group(self, request):
-        """Sincroniza um grupo específico com M365"""
-        tenant = self.get_tenant_from_request()
-        group_id = request.data.get('group_id')
-        operation = request.data.get('operation', 'create')
-        
-        if not tenant:
-            return Response(
-                {'error': 'Tenant não encontrado ou acesso negado'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not group_id:
-            return Response(
-                {'error': 'ID do grupo é obrigatório'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if operation not in ['create', 'sync_members']:
-            return Response(
-                {'error': 'Operação inválida. Use: create, sync_members'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            managed_group = get_object_or_404(ManagedGroup, id=group_id, tenant=tenant)
-            sync_service = M365SyncService(tenant)
-            
-            result = sync_service.sync_group_to_m365(managed_group, operation)
-            
-            return Response(result)
-            
-        except ValueError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            logger.error(f"Erro na sincronização do grupo: {e}")
-            return Response(
-                {'error': 'Erro interno do servidor'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    @action(detail=False, methods=['post'])
-    def sync_all_users(self, request):
+    def sync_users(self, request):
         """Sincroniza todos os usuários do tenant com M365"""
         tenant = self.get_tenant_from_request()
         
@@ -168,25 +90,28 @@ class M365IntegrationViewSet(viewsets.ViewSet):
             )
         
         try:
+            config = M365Configuration.objects.get(tenant=tenant)
             sync_service = M365SyncService(tenant)
-            result = sync_service.sync_all_users()
+            
+            # Executa sincronização de usuários
+            result = sync_service.sync_users()
             
             return Response(result)
             
-        except ValueError as e:
+        except M365Configuration.DoesNotExist:
             return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Configuração M365 não encontrada para este tenant'},
+                status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            logger.error(f"Erro na sincronização em lote de usuários: {e}")
+            logger.error(f"Erro ao sincronizar usuários M365: {str(e)}")
             return Response(
-                {'error': 'Erro interno do servidor'},
+                {'error': f'Erro interno: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=False, methods=['post'])
-    def sync_all_groups(self, request):
+    def sync_groups(self, request):
         """Sincroniza todos os grupos do tenant com M365"""
         tenant = self.get_tenant_from_request()
         
@@ -197,20 +122,55 @@ class M365IntegrationViewSet(viewsets.ViewSet):
             )
         
         try:
+            config = M365Configuration.objects.get(tenant=tenant)
             sync_service = M365SyncService(tenant)
-            result = sync_service.sync_all_groups()
+            
+            # Executa sincronização de grupos
+            result = sync_service.sync_groups()
             
             return Response(result)
             
-        except ValueError as e:
+        except M365Configuration.DoesNotExist:
             return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Configuração M365 não encontrada para este tenant'},
+                status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            logger.error(f"Erro na sincronização em lote de grupos: {e}")
+            logger.error(f"Erro ao sincronizar grupos M365: {str(e)}")
             return Response(
-                {'error': 'Erro interno do servidor'},
+                {'error': f'Erro interno: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'])
+    def full_sync(self, request):
+        """Executa sincronização completa (usuários e grupos)"""
+        tenant = self.get_tenant_from_request()
+        
+        if not tenant:
+            return Response(
+                {'error': 'Tenant não encontrado ou acesso negado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            config = M365Configuration.objects.get(tenant=tenant)
+            sync_service = M365SyncService(tenant)
+            
+            # Executa sincronização completa
+            result = sync_service.full_sync()
+            
+            return Response(result)
+            
+        except M365Configuration.DoesNotExist:
+            return Response(
+                {'error': 'Configuração M365 não encontrada para este tenant'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Erro ao executar sincronização completa M365: {str(e)}")
+            return Response(
+                {'error': f'Erro interno: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -228,111 +188,42 @@ class M365IntegrationViewSet(viewsets.ViewSet):
         try:
             config = M365Configuration.objects.get(tenant=tenant)
             
-            # Estatísticas de usuários
-            users_stats = {
-                'total': ManagedUser.objects.filter(tenant=tenant).count(),
-                'synced': ManagedUser.objects.filter(
-                    tenant=tenant, 
-                    m365_object_id__isnull=False,
-                    sync_status='synced'
-                ).count(),
-                'pending': ManagedUser.objects.filter(
-                    tenant=tenant,
-                    sync_status__in=['pending', 'error']
-                ).count()
-            }
-            
-            # Estatísticas de grupos
-            groups_stats = {
-                'total': ManagedGroup.objects.filter(tenant=tenant).count(),
-                'synced': ManagedGroup.objects.filter(
-                    tenant=tenant,
-                    m365_object_id__isnull=False,
-                    sync_status='synced'
-                ).count(),
-                'pending': ManagedGroup.objects.filter(
-                    tenant=tenant,
-                    sync_status__in=['pending', 'error']
-                ).count()
-            }
+            # Conta usuários e grupos sincronizados
+            users_count = ManagedUser.objects.filter(tenant=tenant, source='M365').count()
+            groups_count = ManagedGroup.objects.filter(tenant=tenant, source='M365').count()
             
             return Response({
-                'tenant_id': tenant.id,
-                'tenant_name': tenant.name,
-                'sync_enabled': config.sync_enabled,
-                'connection_status': config.connection_status,
-                'last_sync': config.last_sync,
-                'last_error': config.last_error,
-                'users': users_stats,
-                'groups': groups_stats
+                'success': True,
+                'config': {
+                    'sync_enabled': config.sync_enabled,
+                    'sync_users': config.sync_users,
+                    'sync_groups': config.sync_groups,
+                    'sync_interval_hours': config.sync_interval_hours,
+                    'last_sync_at': config.last_sync_at.isoformat() if config.last_sync_at else None,
+                    'last_sync_status': config.last_sync_status,
+                    'last_sync_message': config.last_sync_message
+                },
+                'stats': {
+                    'synced_users': users_count,
+                    'synced_groups': groups_count
+                }
             })
             
         except M365Configuration.DoesNotExist:
             return Response(
-                {'error': 'Configuração M365 não encontrada'},
+                {'error': 'Configuração M365 não encontrada para este tenant'},
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            logger.error(f"Erro ao obter status de sincronização: {e}")
+            logger.error(f"Erro ao obter status de sincronização M365: {str(e)}")
             return Response(
-                {'error': 'Erro interno do servidor'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    @action(detail=False, methods=['post'])
-    def create_user_in_m365(self, request):
-        """Cria um usuário diretamente no M365 (sem criar ManagedUser)"""
-        tenant = self.get_tenant_from_request()
-        
-        if not tenant:
-            return Response(
-                {'error': 'Tenant não encontrado ou acesso negado'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        required_fields = ['displayName', 'userPrincipalName', 'mailNickname']
-        user_data = {}
-        
-        for field in required_fields:
-            value = request.data.get(field)
-            if not value:
-                return Response(
-                    {'error': f'Campo obrigatório: {field}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            user_data[field] = value
-        
-        # Campos opcionais
-        optional_fields = [
-            'givenName', 'surname', 'jobTitle', 'department', 
-            'officeLocation', 'password', 'accountEnabled'
-        ]
-        
-        for field in optional_fields:
-            if field in request.data:
-                user_data[field] = request.data[field]
-        
-        try:
-            sync_service = M365SyncService(tenant)
-            result = sync_service.graph_client.create_user(user_data)
-            
-            return Response(result)
-            
-        except ValueError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            logger.error(f"Erro ao criar usuário no M365: {e}")
-            return Response(
-                {'error': 'Erro interno do servidor'},
+                {'error': f'Erro interno: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=False, methods=['get'])
-    def list_m365_users(self, request):
-        """Lista usuários diretamente do M365"""
+    def list_managed_users(self, request):
+        """Lista usuários gerenciados do tenant"""
         tenant = self.get_tenant_from_request()
         
         if not tenant:
@@ -341,36 +232,44 @@ class M365IntegrationViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        filter_query = request.query_params.get('filter')
-        select_fields = request.query_params.get('select')
-        
-        if select_fields:
-            select_fields = select_fields.split(',')
-        
         try:
-            sync_service = M365SyncService(tenant)
-            result = sync_service.graph_client.list_users(
-                filter_query=filter_query,
-                select_fields=select_fields
-            )
+            users = ManagedUser.objects.filter(tenant=tenant).select_related('user')
             
-            return Response(result)
+            users_data = []
+            for managed_user in users:
+                users_data.append({
+                    'id': managed_user.id,
+                    'user_id': managed_user.user.id,
+                    'username': managed_user.user.username,
+                    'email': managed_user.user.email,
+                    'first_name': managed_user.user.first_name,
+                    'last_name': managed_user.user.last_name,
+                    'external_id': managed_user.external_id,
+                    'source': managed_user.source,
+                    'department': managed_user.department,
+                    'job_title': managed_user.job_title,
+                    'office_location': managed_user.office_location,
+                    'sync_enabled': managed_user.sync_enabled,
+                    'last_synced_at': managed_user.last_synced_at.isoformat() if managed_user.last_synced_at else None,
+                    'is_active': managed_user.user.is_active
+                })
             
-        except ValueError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({
+                'success': True,
+                'users': users_data,
+                'count': len(users_data)
+            })
+            
         except Exception as e:
-            logger.error(f"Erro ao listar usuários do M365: {e}")
+            logger.error(f"Erro ao listar usuários gerenciados: {str(e)}")
             return Response(
-                {'error': 'Erro interno do servidor'},
+                {'error': f'Erro interno: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=False, methods=['get'])
-    def list_m365_groups(self, request):
-        """Lista grupos diretamente do M365"""
+    def list_managed_groups(self, request):
+        """Lista grupos gerenciados do tenant"""
         tenant = self.get_tenant_from_request()
         
         if not tenant:
@@ -379,22 +278,40 @@ class M365IntegrationViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        filter_query = request.query_params.get('filter')
-        
         try:
-            sync_service = M365SyncService(tenant)
-            result = sync_service.graph_client.list_groups(filter_query=filter_query)
+            groups = ManagedGroup.objects.filter(tenant=tenant).prefetch_related('members__user')
             
-            return Response(result)
+            groups_data = []
+            for group in groups:
+                members = [{
+                    'id': membership.user.id,
+                    'username': membership.user.user.username,
+                    'email': membership.user.user.email,
+                    'first_name': membership.user.user.first_name,
+                    'last_name': membership.user.user.last_name
+                } for membership in group.members.all()]
+                
+                groups_data.append({
+                    'id': group.id,
+                    'name': group.name,
+                    'description': group.description,
+                    'external_id': group.external_id,
+                    'source': group.source,
+                    'sync_enabled': group.sync_enabled,
+                    'last_synced_at': group.last_synced_at.isoformat() if group.last_synced_at else None,
+                    'members_count': len(members),
+                    'members': members
+                })
             
-        except ValueError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({
+                'success': True,
+                'groups': groups_data,
+                'count': len(groups_data)
+            })
+            
         except Exception as e:
-            logger.error(f"Erro ao listar grupos do M365: {e}")
+            logger.error(f"Erro ao listar grupos gerenciados: {str(e)}")
             return Response(
-                {'error': 'Erro interno do servidor'},
+                {'error': f'Erro interno: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

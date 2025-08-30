@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  saas-identity-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: saas-identity-agent
+    restart: unless-stopped
+    
+    # Environment variables - MUST be configured before deployment
+    environment:
+      # Required: Agent Configuration
+      - AGENT_TENANT_ID=${AGENT_TENANT_ID:?Please set AGENT_TENANT_ID}
+      - AGENT_BACKEND_URL=${AGENT_BACKEND_URL:?Please set AGENT_BACKEND_URL}
+      - AGENT_API_KEY=${AGENT_API_KEY:?Please set AGENT_API_KEY}
+      
+      # Required: Active Directory Configuration
+      - AD_DOMAIN_NAME=${AD_DOMAIN_NAME:?Please set AD_DOMAIN_NAME}
+      - AD_SERVICE_ACCOUNT=${AD_SERVICE_ACCOUNT:?Please set AD_SERVICE_ACCOUNT}
+      - AD_SERVICE_PASSWORD=${AD_SERVICE_PASSWORD:?Please set AD_SERVICE_PASSWORD}
+      
+      # Optional: Agent Settings
+      - AGENT_ID=${AGENT_ID:-}
+      - AGENT_ENVIRONMENT=${AGENT_ENVIRONMENT:-Production}
+      - AGENT_HEARTBEAT_INTERVAL=${AGENT_HEARTBEAT_INTERVAL:-60}
+      - AGENT_SYNC_INTERVAL=${AGENT_SYNC_INTERVAL:-3600}
+      - AGENT_COMMAND_CHECK_INTERVAL=${AGENT_COMMAND_CHECK_INTERVAL:-30}
+      - AGENT_MAX_RETRY_ATTEMPTS=${AGENT_MAX_RETRY_ATTEMPTS:-3}
+      - AGENT_RETRY_DELAY=${AGENT_RETRY_DELAY:-5}
+      - AGENT_SYNC_ONLY_ENABLED=${AGENT_SYNC_ONLY_ENABLED:-true}
+      
+      # Optional: Backend Settings
+      - BACKEND_TIMEOUT=${BACKEND_TIMEOUT:-30}
+      - BACKEND_VALIDATE_SSL=${BACKEND_VALIDATE_SSL:-true}
+      - BACKEND_PROXY_URL=${BACKEND_PROXY_URL:-}
+      - BACKEND_PROXY_USERNAME=${BACKEND_PROXY_USERNAME:-}
+      - BACKEND_PROXY_PASSWORD=${BACKEND_PROXY_PASSWORD:-}
+      
+      # Optional: Active Directory Settings
+      - AD_DOMAIN_CONTROLLER=${AD_DOMAIN_CONTROLLER:-}
+      - AD_DEFAULT_USER_CONTAINER=${AD_DEFAULT_USER_CONTAINER:-CN=Users}
+      - AD_DEFAULT_GROUP_CONTAINER=${AD_DEFAULT_GROUP_CONTAINER:-CN=Users}
+      - AD_USE_SECURE_CONNECTION=${AD_USE_SECURE_CONNECTION:-true}
+      - AD_LDAP_PORT=${AD_LDAP_PORT:-636}
+      - AD_CONNECTION_TIMEOUT=${AD_CONNECTION_TIMEOUT:-30}
+      - AD_SYNC_OUS=${AD_SYNC_OUS:-}
+      - AD_EXCLUDE_OUS=${AD_EXCLUDE_OUS:-}
+    
+    # Volumes for persistent data and logs
+    volumes:
+      - agent_data:/app/data
+      - agent_logs:/app/logs
+      # Optional: Mount custom configuration
+      # - ./appsettings.custom.json:/app/appsettings.json:ro
+    
+    # Network configuration
+    networks:
+      - saas-agent-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+# Named volumes for data persistence
+volumes:
+  agent_data:
+    driver: local
+  agent_logs:
+    driver: local
+
+# Network configuration
+networks:
+  saas-agent-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

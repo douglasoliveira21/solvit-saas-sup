@@ -1,51 +1,134 @@
 # SaaS Identity Management Agent
 
-O SaaS Identity Management Agent é um serviço Windows desenvolvido em C# que atua como ponte entre o Active Directory local e o backend SaaS, permitindo sincronização de usuários e grupos, além de execução de comandos remotos.
+A robust, cross-platform agent for synchronizing Active Directory users and groups with the SaaS Identity Management platform.
 
-## Características
+## Overview
 
-- **Serviço Windows**: Executa em segundo plano como serviço do Windows
-- **Comunicação Segura**: HTTPS com autenticação via API Key
-- **Integração AD**: Sincronização bidirecional com Active Directory
-- **Processamento de Comandos**: Executa comandos remotos do backend
-- **Logging Avançado**: Logs estruturados com Serilog
-- **Configuração Flexível**: Configuração via JSON com suporte a ambientes
-- **Retry Logic**: Lógica de retry com backoff exponencial
-- **Monitoramento**: Heartbeat e health checks
+The SaaS Identity Management Agent is a background service that provides seamless integration between on-premises Active Directory and cloud-based identity management systems. It enables organizations to maintain centralized user and group management while leveraging modern SaaS identity solutions.
 
-## Pré-requisitos
+## Key Features
 
-### Sistema
-- Windows Server 2016+ ou Windows 10+
-- .NET 6.0 Runtime
-- PowerShell 5.1+
-- Privilégios de Administrador para instalação
+### 🔄 **Multi-Platform Support**
+- **Windows Service**: Native Windows service installation
+- **Linux Systemd**: Systemd service for Linux distributions  
+- **Docker Container**: Containerized deployment for any platform
+- **Cloud Ready**: Supports deployment in cloud environments
 
-### Active Directory
-- Conta de serviço com permissões para:
-  - Leitura de usuários e grupos
-  - Criação/modificação de usuários
-  - Adição de usuários a grupos
-  - Acesso às OUs configuradas
+### 🛡️ **Enterprise Security**
+- Secure LDAPS connections to Active Directory
+- API key-based authentication with the SaaS platform
+- Service account with least-privilege access
+- Encrypted configuration storage options
 
-### Rede
-- Conectividade HTTPS com o backend SaaS
-- Portas de saída: 443 (HTTPS)
-- Resolução DNS para o domínio do backend
+### 🔄 **Bidirectional Synchronization**
+- Real-time user and group synchronization from Active Directory
+- Configurable sync intervals and retry mechanisms
+- Delta synchronization for optimal performance
+- Conflict resolution and data validation
 
-## Instalação
+### 📊 **Comprehensive Monitoring**
+- Structured logging with Serilog
+- Health checks and heartbeat monitoring
+- Performance metrics and sync statistics
+- Integration with Windows Event Log and systemd journal
 
-### 1. Preparação
+### ⚙️ **Flexible Configuration**
+- JSON-based configuration with environment variable support
+- Organizational Unit (OU) filtering and exclusion
+- Customizable sync policies and user mapping
+- Environment-specific configuration profiles
+
+## Prerequisites
+
+### Common Requirements
+
+- **.NET 6 Runtime**: Required for all deployment methods
+- **Network Access**: 
+  - Outbound HTTPS access to the SaaS backend API
+  - LDAP/LDAPS access to Active Directory domain controllers
+- **Service Account**: Dedicated AD service account with read permissions
+- **API Key**: Generated from the SaaS platform admin panel
+
+### Platform-Specific Requirements
+
+#### Windows
+- Windows Server 2016+ or Windows 10+
+- PowerShell 5.0+
+- Administrator privileges for installation
+
+#### Linux
+- Modern Linux distribution with systemd
+- curl and ldap-utils packages
+- Root privileges for installation
+
+#### Docker
+- Docker Engine 20.10+
+- Docker Compose 2.0+ (optional but recommended)
+
+### Active Directory Requirements
+- Service account with permissions for:
+  - Read access to user and group objects
+  - Read access to specified Organizational Units
+  - No write permissions required (read-only synchronization)
+- Network connectivity to domain controllers
+- LDAP/LDAPS protocol access (ports 389/636)
+
+## Quick Start
+
+### Windows Installation
 
 ```powershell
-# Baixar e extrair o agente
-# Navegar para o diretório do agente
-cd C:\path\to\SaasIdentityAgent
+# Clone the repository
+git clone https://github.com/yourcompany/saas-identity-agent.git
+cd saas-identity-agent
+
+# Quick deployment with configuration
+.\Scripts\deploy-agent.ps1 `
+    -TenantId "your-tenant-id" `
+    -BackendUrl "https://api.yourcompany.com" `
+    -ApiKey "your-api-key" `
+    -DomainName "company.local" `
+    -ServiceAccountUsername "COMPANY\svc-saas" `
+    -ServiceAccountPassword "SecurePassword123!"
 ```
 
-### 2. Configuração
+### Linux Installation
 
-Edite o arquivo `appsettings.json`:
+```bash
+# Clone the repository
+git clone https://github.com/yourcompany/saas-identity-agent.git
+cd saas-identity-agent
+
+# Quick deployment with configuration
+sudo ./Scripts/deploy-agent-linux.sh \
+    --tenant-id "your-tenant-id" \
+    --backend-url "https://api.yourcompany.com" \
+    --api-key "your-api-key" \
+    --domain-name "company.local" \
+    --service-account "svc-saas" \
+    --service-password "SecurePassword123!"
+```
+
+### Docker Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourcompany/saas-identity-agent.git
+cd saas-identity-agent
+
+# Configure environment
+cp .env.example .env
+vim .env  # Edit configuration
+
+# Deploy with Docker Compose
+docker-compose up -d
+```
+
+## Configuration
+
+### Basic Configuration
+
+The agent uses a JSON configuration file (`appsettings.json`) with the following structure:
 
 ```json
 {

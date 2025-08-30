@@ -3,9 +3,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from django.utils import timezone
 from django.db import transaction
-from tenants.models import (
-    Tenant, M365Configuration, ManagedUser, ManagedGroup
-)
+from django.contrib.auth.models import User
+from tenants.models import Tenant, M365Configuration, ManagedUser, ManagedGroup, GroupMembership
 from core.models import AuditLog
 from .graph_client import MicrosoftGraphClient, GraphAPIError
 
@@ -27,410 +26,293 @@ class M365SyncService:
             raise ValueError(f"Configuração M365 não encontrada para o tenant {tenant.name}")
     
     def _create_audit_log(self, action: str, resource_type: str, resource_id: str = None, 
-                         success: bool = True, details: Dict = None, error_message: str = None):
+                         success: bool = True, metadata: Dict = None, error_message: str = None):
         """Cria log de auditoria para operações de sincronização"""
-        try:
-            AuditLog.objects.create(
-                tenant=self.tenant,
-                action=action,
-                resource_type=resource_type,
-                resource_id=resource_id,
-                success=success,
-                details=details or {},
-                error_message=error_message,
-                ip_address='127.0.0.1',  # Sistema interno
-                user_agent='M365SyncService'
-            )
-        except Exception as e:
-            logger.error(f"Erro ao criar log de auditoria: {e}")
+        AuditLog.objects.create(
+            tenant=self.tenant,
+            user=None,  # Operação do sistema
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            resource_name=f"M365 Sync - {action}",
+            description=f"Sincronização M365: {action} {resource_type}",
+            success=success,
+            metadata=metadata or {},
+            error_message=error_message,
+            ip_address='127.0.0.1',  # Sistema interno
+            user_agent='M365SyncService'
+        )
     
     def test_connection(self) -> Dict[str, Any]:
         """Testa a conexão com Microsoft 365"""
         try:
+            if not self.graph_client:
+                return {
+                    'success': False,
+                    'error': 'Cliente Graph não configurado'
+                }
+            
+            # Tenta fazer uma chamada simples para testar a conexão
             result = self.graph_client.test_connection()
             
-            # Atualiza status da configuração
-            if result['success']:
-                self.config.connection_status = 'connected'
-                self.config.last_error = None
-            else:
-                self.config.connection_status = 'error'
-                self.config.last_error = result.get('message', 'Erro desconhecido')
-            
-            self.config.save()
-            
             self._create_audit_log(
-                action='test_connection',
-                resource_type='m365_config',
-                resource_id=str(self.config.id),
+                action='SYNC',
+                resource_type='SYSTEM',
                 success=result['success'],
-                details=result,
-                error_message=result.get('message') if not result['success'] else None
+                metadata={'test_connection': result}
             )
             
             return result
             
         except Exception as e:
-            logger.error(f"Erro no teste de conexão M365: {e}")
-            self.config.connection_status = 'error'
-            self.config.last_error = str(e)
+            error_msg = f"Erro inesperado: {str(e)}"
+            
+            self._create_audit_log(
+                action='SYNC',
+                resource_type='SYSTEM',
+                success=False,
+                error_message=error_msg
+            )
+            
+            return {
+                'success': False,
+                'error': error_msg
+            }
+    
+    def sync_users(self) -> Dict[str, Any]:
+        """Sincroniza usuários do Microsoft 365"""
+        if not self.config.sync_enabled or not self.config.sync_users:
+            return {'success': False, 'error': 'Sincronização de usuários desabilitada'}
+        
+        try:
+            # Obtém usuários do Microsoft Graph
+            filter_query = self.config.user_filter if self.config.user_filter else None
+            select_fields = ['id', 'userPrincipalName', 'displayName', 'givenName', 'surname', 'mail', 'department', 'jobTitle', 'officeLocation', 'manager']
+            
+            ms_users = self.graph_client.get_users(filter_query=filter_query, select_fields=select_fields)
+            
+            synced_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for ms_user in ms_users:
+                    try:
+                        self._sync_single_user(ms_user)
+                        synced_count += 1
+                    except Exception as e:
+                        errors.append(f"Erro ao sincronizar usuário {ms_user.get('userPrincipalName', 'N/A')}: {str(e)}")
+                        logger.error(f"Erro ao sincronizar usuário: {str(e)}")
+            
+            # Atualiza status da configuração
+            self.config.last_sync_at = timezone.now()
+            self.config.last_sync_status = 'SUCCESS' if not errors else 'ERROR'
+            self.config.last_sync_message = f"Sincronizados {synced_count} usuários. {len(errors)} erros."
             self.config.save()
             
-            return {
-                'success': False,
-                'message': f'Erro interno: {str(e)}'
-            }
-    
-    def sync_user_to_m365(self, managed_user: ManagedUser, operation: str = 'create') -> Dict[str, Any]:
-        """Sincroniza um usuário específico com M365"""
-        if not self.config.sync_enabled:
-            return {
-                'success': False,
-                'message': 'Sincronização M365 está desabilitada'
-            }
-        
-        try:
-            with transaction.atomic():
-                if operation == 'create':
-                    result = self._create_user_in_m365(managed_user)
-                elif operation == 'update':
-                    result = self._update_user_in_m365(managed_user)
-                elif operation == 'disable':
-                    result = self._disable_user_in_m365(managed_user)
-                elif operation == 'enable':
-                    result = self._enable_user_in_m365(managed_user)
-                else:
-                    raise ValueError(f"Operação inválida: {operation}")
-                
-                # Atualiza status de sincronização
-                if result['success']:
-                    managed_user.last_m365_sync = timezone.now()
-                    managed_user.sync_status = 'synced'
-                    
-                    # Salva o ID do objeto M365 se for criação
-                    if operation == 'create' and 'user_id' in result:
-                        managed_user.m365_object_id = result['user_id']
-                else:
-                    managed_user.sync_status = 'error'
-                
-                managed_user.save()
-                
-                self._create_audit_log(
-                    action=f'm365_user_{operation}',
-                    resource_type='managed_user',
-                    resource_id=str(managed_user.id),
-                    success=result['success'],
-                    details={
-                        'user_id': managed_user.id,
-                        'username': managed_user.username,
-                        'operation': operation,
-                        'result': result
-                    },
-                    error_message=result.get('message') if not result['success'] else None
-                )
-                
-                return result
-                
-        except Exception as e:
-            logger.error(f"Erro na sincronização do usuário {managed_user.username}: {e}")
-            managed_user.sync_status = 'error'
-            managed_user.save()
+            self._create_audit_log(
+                action='SYNC',
+                resource_type='USER',
+                success=len(errors) == 0,
+                metadata={
+                    'synced_count': synced_count,
+                    'error_count': len(errors),
+                    'errors': errors[:5]  # Primeiros 5 erros
+                }
+            )
             
             return {
-                'success': False,
-                'message': f'Erro interno: {str(e)}'
+                'success': len(errors) == 0,
+                'synced_count': synced_count,
+                'error_count': len(errors),
+                'errors': errors
             }
+            
+        except Exception as e:
+            error_msg = f"Erro na sincronização de usuários: {str(e)}"
+            logger.error(error_msg)
+            
+            self.config.last_sync_at = timezone.now()
+            self.config.last_sync_status = 'ERROR'
+            self.config.last_sync_message = error_msg
+            self.config.save()
+            
+            self._create_audit_log(
+                action='SYNC',
+                resource_type='USER',
+                success=False,
+                error_message=error_msg
+            )
+            
+            return {'success': False, 'error': error_msg}
     
-    def _create_user_in_m365(self, managed_user: ManagedUser) -> Dict[str, Any]:
-        """Cria usuário no M365"""
-        # Gera UPN baseado no domínio do tenant
-        domain = self.tenant.domain or 'example.com'
-        upn = f"{managed_user.username}@{domain}"
+    def _sync_single_user(self, ms_user: Dict[str, Any]):
+        """Sincroniza um único usuário"""
+        email = ms_user.get('mail') or ms_user.get('userPrincipalName')
+        if not email:
+            raise ValueError("Usuário sem email válido")
         
-        user_data = {
-            'displayName': managed_user.display_name or f"{managed_user.first_name} {managed_user.last_name}".strip(),
-            'userPrincipalName': upn,
-            'mailNickname': managed_user.username,
-            'givenName': managed_user.first_name,
-            'surname': managed_user.last_name,
-            'accountEnabled': managed_user.is_active,
-            'password': 'TempPassword123!',  # Senha temporária
-            'forceChangePasswordNextSignIn': True
-        }
-        
-        return self.graph_client.create_user(user_data)
-    
-    def _update_user_in_m365(self, managed_user: ManagedUser) -> Dict[str, Any]:
-        """Atualiza usuário no M365"""
-        if not managed_user.m365_object_id:
-            return {
-                'success': False,
-                'message': 'Usuário não possui ID do M365'
+        # Busca ou cria o usuário Django
+        user, created = User.objects.get_or_create(
+            username=email,
+            defaults={
+                'email': email,
+                'first_name': ms_user.get('givenName', ''),
+                'last_name': ms_user.get('surname', ''),
+                'is_active': True
             }
+        )
         
-        user_data = {
-            'displayName': managed_user.display_name or f"{managed_user.first_name} {managed_user.last_name}".strip(),
-            'givenName': managed_user.first_name,
-            'surname': managed_user.last_name,
-            'accountEnabled': managed_user.is_active
-        }
+        # Atualiza dados se não foi criado agora
+        if not created:
+            user.email = email
+            user.first_name = ms_user.get('givenName', '')
+            user.last_name = ms_user.get('surname', '')
+            user.save()
         
-        return self.graph_client.update_user(managed_user.m365_object_id, user_data)
-    
-    def _disable_user_in_m365(self, managed_user: ManagedUser) -> Dict[str, Any]:
-        """Desabilita usuário no M365"""
-        if not managed_user.m365_object_id:
-            return {
-                'success': False,
-                'message': 'Usuário não possui ID do M365'
+        # Busca ou cria o ManagedUser
+        managed_user, _ = ManagedUser.objects.get_or_create(
+            tenant=self.tenant,
+            user=user,
+            defaults={
+                'external_id': ms_user.get('id'),
+                'source': 'M365',
+                'sync_enabled': True
             }
+        )
         
-        return self.graph_client.disable_user(managed_user.m365_object_id)
+        # Atualiza metadados
+        managed_user.external_id = ms_user.get('id')
+        managed_user.department = ms_user.get('department', '')
+        managed_user.job_title = ms_user.get('jobTitle', '')
+        managed_user.office_location = ms_user.get('officeLocation', '')
+        managed_user.last_synced_at = timezone.now()
+        managed_user.save()
     
-    def _enable_user_in_m365(self, managed_user: ManagedUser) -> Dict[str, Any]:
-        """Habilita usuário no M365"""
-        if not managed_user.m365_object_id:
-            return {
-                'success': False,
-                'message': 'Usuário não possui ID do M365'
-            }
-        
-        return self.graph_client.enable_user(managed_user.m365_object_id)
-    
-    def sync_group_to_m365(self, managed_group: ManagedGroup, operation: str = 'create') -> Dict[str, Any]:
-        """Sincroniza um grupo específico com M365"""
-        if not self.config.sync_enabled:
-            return {
-                'success': False,
-                'message': 'Sincronização M365 está desabilitada'
-            }
+    def sync_groups(self) -> Dict[str, Any]:
+        """Sincroniza grupos do Microsoft 365"""
+        if not self.config.sync_enabled or not self.config.sync_groups:
+            return {'success': False, 'error': 'Sincronização de grupos desabilitada'}
         
         try:
+            # Obtém grupos do Microsoft Graph
+            filter_query = self.config.group_filter if self.config.group_filter else None
+            select_fields = ['id', 'displayName', 'description', 'mail']
+            
+            ms_groups = self.graph_client.get_groups(filter_query=filter_query, select_fields=select_fields)
+            
+            synced_count = 0
+            errors = []
+            
             with transaction.atomic():
-                if operation == 'create':
-                    result = self._create_group_in_m365(managed_group)
-                elif operation == 'sync_members':
-                    result = self._sync_group_members_to_m365(managed_group)
-                else:
-                    raise ValueError(f"Operação inválida: {operation}")
-                
-                # Atualiza status de sincronização
-                if result['success']:
-                    managed_group.last_m365_sync = timezone.now()
-                    managed_group.sync_status = 'synced'
-                    
-                    # Salva o ID do objeto M365 se for criação
-                    if operation == 'create' and 'group_id' in result:
-                        managed_group.m365_object_id = result['group_id']
-                else:
-                    managed_group.sync_status = 'error'
-                
-                managed_group.save()
-                
-                self._create_audit_log(
-                    action=f'm365_group_{operation}',
-                    resource_type='managed_group',
-                    resource_id=str(managed_group.id),
-                    success=result['success'],
-                    details={
-                        'group_id': managed_group.id,
-                        'group_name': managed_group.name,
-                        'operation': operation,
-                        'result': result
-                    },
-                    error_message=result.get('message') if not result['success'] else None
-                )
-                
-                return result
-                
-        except Exception as e:
-            logger.error(f"Erro na sincronização do grupo {managed_group.name}: {e}")
-            managed_group.sync_status = 'error'
-            managed_group.save()
+                for ms_group in ms_groups:
+                    try:
+                        self._sync_single_group(ms_group)
+                        synced_count += 1
+                    except Exception as e:
+                        errors.append(f"Erro ao sincronizar grupo {ms_group.get('displayName', 'N/A')}: {str(e)}")
+                        logger.error(f"Erro ao sincronizar grupo: {str(e)}")
+            
+            self._create_audit_log(
+                action='SYNC',
+                resource_type='GROUP',
+                success=len(errors) == 0,
+                metadata={
+                    'synced_count': synced_count,
+                    'error_count': len(errors),
+                    'errors': errors[:5]
+                }
+            )
             
             return {
-                'success': False,
-                'message': f'Erro interno: {str(e)}'
+                'success': len(errors) == 0,
+                'synced_count': synced_count,
+                'error_count': len(errors),
+                'errors': errors
             }
+            
+        except Exception as e:
+            error_msg = f"Erro na sincronização de grupos: {str(e)}"
+            logger.error(error_msg)
+            
+            self._create_audit_log(
+                action='SYNC',
+                resource_type='GROUP',
+                success=False,
+                error_message=error_msg
+            )
+            
+            return {'success': False, 'error': error_msg}
     
-    def _create_group_in_m365(self, managed_group: ManagedGroup) -> Dict[str, Any]:
-        """Cria grupo no M365"""
-        group_data = {
-            'displayName': managed_group.name,
-            'mailNickname': managed_group.name.lower().replace(' ', ''),
-            'description': managed_group.description or f'Grupo gerenciado: {managed_group.name}',
-            'securityEnabled': True,
-            'mailEnabled': False
-        }
+    def _sync_single_group(self, ms_group: Dict[str, Any]):
+        """Sincroniza um único grupo"""
+        group_name = ms_group.get('displayName')
+        if not group_name:
+            raise ValueError("Grupo sem nome válido")
         
-        # Define tipo do grupo
-        if managed_group.group_type == 'security':
-            group_data['groupTypes'] = []
-        elif managed_group.group_type == 'distribution':
-            group_data['mailEnabled'] = True
-            group_data['securityEnabled'] = False
-        
-        return self.graph_client.create_group(group_data)
-    
-    def _sync_group_members_to_m365(self, managed_group: ManagedGroup) -> Dict[str, Any]:
-        """Sincroniza membros do grupo com M365"""
-        if not managed_group.m365_object_id:
-            return {
-                'success': False,
-                'message': 'Grupo não possui ID do M365'
+        # Busca ou cria o grupo
+        managed_group, _ = ManagedGroup.objects.get_or_create(
+            tenant=self.tenant,
+            name=group_name,
+            defaults={
+                'external_id': ms_group.get('id'),
+                'source': 'M365',
+                'description': ms_group.get('description', ''),
+                'sync_enabled': True
             }
+        )
         
-        # Obtém membros atuais no M365
-        current_members_result = self.graph_client.get_group_members(managed_group.m365_object_id)
+        # Atualiza dados
+        managed_group.external_id = ms_group.get('id')
+        managed_group.description = ms_group.get('description', '')
+        managed_group.last_synced_at = timezone.now()
+        managed_group.save()
         
-        if not current_members_result['success']:
-            return current_members_result
-        
-        current_m365_members = {member['id'] for member in current_members_result['members']}
-        
-        # Obtém membros desejados (usuários com M365 ID)
-        desired_members = set()
-        for user in managed_group.members.filter(m365_object_id__isnull=False):
-            desired_members.add(user.m365_object_id)
+        # Sincroniza membros do grupo
+        try:
+            members = self.graph_client.get_group_members(ms_group.get('id'))
+            self._sync_group_members(managed_group, members)
+        except Exception as e:
+            logger.warning(f"Erro ao sincronizar membros do grupo {group_name}: {str(e)}")
+    
+    def _sync_group_members(self, managed_group: ManagedGroup, members: List[Dict[str, Any]]):
+        """Sincroniza membros de um grupo"""
+        # Remove membros atuais
+        GroupMembership.objects.filter(group=managed_group).delete()
         
         # Adiciona novos membros
-        members_to_add = desired_members - current_m365_members
-        add_results = []
-        
-        for user_id in members_to_add:
-            result = self.graph_client.add_group_member(managed_group.m365_object_id, user_id)
-            add_results.append(result)
-        
-        # Remove membros que não deveriam estar
-        members_to_remove = current_m365_members - desired_members
-        remove_results = []
-        
-        for user_id in members_to_remove:
-            result = self.graph_client.remove_group_member(managed_group.m365_object_id, user_id)
-            remove_results.append(result)
-        
-        # Verifica se todas as operações foram bem-sucedidas
-        all_successful = all(r['success'] for r in add_results + remove_results)
-        
-        return {
-            'success': all_successful,
-            'message': f'Sincronização de membros concluída. Adicionados: {len(members_to_add)}, Removidos: {len(members_to_remove)}',
-            'details': {
-                'added': len(members_to_add),
-                'removed': len(members_to_remove),
-                'add_results': add_results,
-                'remove_results': remove_results
-            }
-        }
+        for member in members:
+            if member.get('@odata.type') == '#microsoft.graph.user':
+                email = member.get('mail') or member.get('userPrincipalName')
+                if email:
+                    try:
+                        user = User.objects.get(username=email)
+                        managed_user = ManagedUser.objects.get(tenant=self.tenant, user=user)
+                        
+                        GroupMembership.objects.create(
+                            group=managed_group,
+                            user=managed_user,
+                            last_synced_at=timezone.now()
+                        )
+                    except (User.DoesNotExist, ManagedUser.DoesNotExist):
+                        logger.warning(f"Usuário {email} não encontrado para adicionar ao grupo {managed_group.name}")
     
-    def sync_all_users(self) -> Dict[str, Any]:
-        """Sincroniza todos os usuários do tenant com M365"""
-        if not self.config.sync_enabled:
-            return {
-                'success': False,
-                'message': 'Sincronização M365 está desabilitada'
-            }
-        
-        users = ManagedUser.objects.filter(tenant=self.tenant, is_active=True)
+    def full_sync(self) -> Dict[str, Any]:
+        """Executa sincronização completa de usuários e grupos"""
         results = {
-            'total': users.count(),
-            'success': 0,
-            'errors': 0,
-            'details': []
+            'users': self.sync_users(),
+            'groups': self.sync_groups()
         }
         
-        for user in users:
-            # Determina operação baseada no status atual
-            if user.m365_object_id:
-                operation = 'update'
-            else:
-                operation = 'create'
-            
-            result = self.sync_user_to_m365(user, operation)
-            
-            if result['success']:
-                results['success'] += 1
-            else:
-                results['errors'] += 1
-            
-            results['details'].append({
-                'user_id': user.id,
-                'username': user.username,
-                'operation': operation,
-                'success': result['success'],
-                'message': result.get('message')
-            })
-        
-        # Atualiza timestamp da última sincronização
-        self.config.last_sync = timezone.now()
-        self.config.save()
+        overall_success = results['users']['success'] and results['groups']['success']
         
         self._create_audit_log(
-            action='m365_bulk_sync_users',
-            resource_type='tenant',
-            resource_id=str(self.tenant.id),
-            success=results['errors'] == 0,
-            details=results
+            action='SYNC',
+            resource_type='SYSTEM',
+            success=overall_success,
+            metadata={'full_sync_results': results}
         )
         
         return {
-            'success': results['errors'] == 0,
-            'message': f"Sincronização concluída. Sucessos: {results['success']}, Erros: {results['errors']}",
-            'results': results
-        }
-    
-    def sync_all_groups(self) -> Dict[str, Any]:
-        """Sincroniza todos os grupos do tenant com M365"""
-        if not self.config.sync_enabled:
-            return {
-                'success': False,
-                'message': 'Sincronização M365 está desabilitada'
-            }
-        
-        groups = ManagedGroup.objects.filter(tenant=self.tenant, is_active=True)
-        results = {
-            'total': groups.count(),
-            'success': 0,
-            'errors': 0,
-            'details': []
-        }
-        
-        for group in groups:
-            # Determina operação baseada no status atual
-            if group.m365_object_id:
-                operation = 'sync_members'
-            else:
-                operation = 'create'
-            
-            result = self.sync_group_to_m365(group, operation)
-            
-            if result['success']:
-                results['success'] += 1
-            else:
-                results['errors'] += 1
-            
-            results['details'].append({
-                'group_id': group.id,
-                'group_name': group.name,
-                'operation': operation,
-                'success': result['success'],
-                'message': result.get('message')
-            })
-        
-        # Atualiza timestamp da última sincronização
-        self.config.last_sync = timezone.now()
-        self.config.save()
-        
-        self._create_audit_log(
-            action='m365_bulk_sync_groups',
-            resource_type='tenant',
-            resource_id=str(self.tenant.id),
-            success=results['errors'] == 0,
-            details=results
-        )
-        
-        return {
-            'success': results['errors'] == 0,
-            'message': f"Sincronização concluída. Sucessos: {results['success']}, Erros: {results['errors']}",
+            'success': overall_success,
             'results': results
         }

@@ -52,7 +52,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     """
     Serializer para registro de novos usuários.
     """
-    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password = serializers.CharField(write_only=True)
     password_confirm = serializers.CharField(write_only=True)
     tenant_name = serializers.CharField(max_length=100)
     tenant_slug = serializers.SlugField(max_length=50)
@@ -97,7 +97,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """Cria usuário e tenant associado."""
-        from tenants.models import Tenant, TenantUser
+        from tenants.models import Tenant
+        from tenants.models import TenantUser
         from django.db import transaction
         
         # Remove campos que não pertencem ao modelo User

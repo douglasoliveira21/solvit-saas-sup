@@ -59,9 +59,43 @@ export interface Tenant {
 }
 
 export interface TenantSettings {
-  microsoft_integration_enabled: boolean;
-  ad_sync_enabled: boolean;
-  audit_retention_days: number;
+  id: string;
+  tenant: string;
+  // Configurações de Segurança
+  password_min_length: number;
+  password_require_uppercase: boolean;
+  password_require_lowercase: boolean;
+  password_require_numbers: boolean;
+  password_require_symbols: boolean;
+  password_expiry_days: number;
+  // Configurações de Bloqueio
+  account_lockout_attempts: number;
+  account_lockout_duration: number;
+  // Configurações de Sessão
+  session_timeout_minutes: number;
+  max_concurrent_sessions: number;
+  // Configurações de Auditoria
+  audit_log_retention_days: number;
+  audit_events_enabled: boolean;
+  // Configurações de Sincronização
+  sync_user_attributes: string[];
+  sync_group_attributes: string[];
+  auto_create_users: boolean;
+  auto_deactivate_users: boolean;
+  // Configurações de Notificação
+  email_notifications_enabled: boolean;
+  // Configurações de Interface
+  ui_theme: 'light' | 'dark' | 'auto';
+  ui_language: string;
+  ui_timezone: string;
+  // Configurações de Limites
+  max_users: number;
+  max_groups: number;
+  // Configurações Customizadas
+  custom_settings: Record<string, any>;
+  // Timestamps
+  created_at: string;
+  updated_at: string;
 }
 
 // Auth types

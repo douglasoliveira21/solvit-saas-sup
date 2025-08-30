@@ -11,7 +11,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-producti
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,solvitsoft.com.br,www.solvitsoft.com.br,82.112.244.92', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Application definition
 INSTALLED_APPS = [
@@ -40,12 +40,16 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'core.middleware.SecurityHeadersMiddleware',
+    'core.middleware.PerformanceMonitoringMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.CacheControlMiddleware',
+    'core.middleware.CompressionMiddleware',
 ]
 
 ROOT_URLCONF = 'saas_identity.urls'
@@ -53,7 +57,7 @@ ROOT_URLCONF = 'saas_identity.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -154,12 +158,37 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:5176,http://127.0.0.1:5176,http://localhost:5177,http://127.0.0.1:5177,http://solvitsoft.com.br,https://solvitsoft.com.br,http://www.solvitsoft.com.br,https://www.solvitsoft.com.br', cast=lambda v: [s.strip() for s in v.split(',')])
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False
+
+# Cache Configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': config('REDIS_URL', default='redis://localhost:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'KEY_PREFIX': 'saas_identity',
+        'TIMEOUT': 300,  # 5 minutes default timeout
+    },
+    'sessions': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': config('REDIS_URL', default='redis://localhost:6379/2'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'KEY_PREFIX': 'saas_identity_sessions',
+        'TIMEOUT': 86400,  # 24 hours for sessions
+    }
+}
+
+# Use Redis for session storage
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'sessions'
+SESSION_COOKIE_AGE = 86400  # 24 hours
 
 # Celery Configuration
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
@@ -170,7 +199,18 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # Frontend URL for password reset emails
-FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+FRONTEND_URL = config('FRONTEND_URL', default='https://solvitsoft.com.br')
+
+# HTTPS Security Settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True, cast=bool)
+SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
 
 # Email Configuration
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
@@ -180,6 +220,45 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@saasidentity.com')
+SUPPORT_EMAIL = config('SUPPORT_EMAIL', default='support@saasidentity.com')
+
+# Email template settings
+EMAIL_TEMPLATE_CONTEXT = {
+    'support_email': SUPPORT_EMAIL,
+    'company_name': 'SaaS Identity',
+}
+
+# Security configuration
+SECURITY_SETTINGS = {
+    # Account lockout settings
+    'ACCOUNT_LOCKOUT': {
+        'MAX_FAILED_ATTEMPTS': 5,
+        'LOCKOUT_DURATION_MINUTES': 30,
+        'RESET_ATTEMPTS_AFTER_MINUTES': 60,
+    },
+    
+    # Password policy settings
+    'PASSWORD_POLICY': {
+        'MIN_LENGTH': 8,
+        'MAX_LENGTH': 128,
+        'REQUIRE_UPPERCASE': True,
+        'REQUIRE_LOWERCASE': True,
+        'REQUIRE_DIGITS': True,
+        'REQUIRE_SPECIAL_CHARS': True,
+        'SPECIAL_CHARS': '!@#$%^&*()_+-=[]{}|;:,.<>?',
+        'PREVENT_COMMON_PASSWORDS': True,
+        'PREVENT_USER_INFO_IN_PASSWORD': True,
+        'PASSWORD_HISTORY_COUNT': 5,
+    },
+    
+    # Security logging
+    'SECURITY_LOGGING': {
+        'LOG_FAILED_LOGINS': True,
+        'LOG_PASSWORD_CHANGES': True,
+        'LOG_ACCOUNT_LOCKOUTS': True,
+        'LOG_SECURITY_EVENTS': True,
+    }
+}
 
 # Microsoft Graph Configuration
 MSGRAPH_CLIENT_ID = config('MSGRAPH_CLIENT_ID', default='')

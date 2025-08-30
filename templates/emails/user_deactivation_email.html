@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conta Desativada - {{ tenant_name }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e74c3c;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #e74c3c;
+            font-size: 20px;
+            margin: 0;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .info-box {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #666;
+        }
+        .support-link {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .support-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">{{ tenant_name }}</div>
+            <h1 class="title">Conta Desativada</h1>
+        </div>
+        
+        <div class="content">
+            <p>Olá <strong>{{ user_name }}</strong>,</p>
+            
+            <p>Informamos que sua conta foi desativada em <strong>{{ tenant_name }}</strong>.</p>
+            
+            <div class="info-box">
+                <p><strong>Detalhes da desativação:</strong></p>
+                <ul>
+                    <li><strong>Usuário:</strong> {{ user_name }}</li>
+                    <li><strong>Organização:</strong> {{ tenant_name }}</li>
+                    <li><strong>Desativado por:</strong> {{ deactivated_by }}</li>
+                    <li><strong>Data:</strong> {{ current_date }}</li>
+                </ul>
+            </div>
+            
+            <p>Se você acredita que isso foi um erro ou precisa reativar sua conta, entre em contato com o administrador do sistema ou nossa equipe de suporte.</p>
+            
+            <p>Obrigado pela compreensão.</p>
+        </div>
+        
+        <div class="footer">
+            <p>Se você tiver dúvidas, entre em contato conosco em <a href="mailto:{{ support_email }}" class="support-link">{{ support_email }}</a></p>
+            <p>Este é um e-mail automático, por favor não responda.</p>
+        </div>
+    </div>
+</body>
+</html>

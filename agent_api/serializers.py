@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from tenants.models import ADConfiguration, ManagedUser, ManagedGroup
+# from tenants.models import ADConfiguration, ManagedUser, ManagedGroup
 from core.models import AuditLog
 
 
@@ -130,18 +130,23 @@ class ADGroupSyncSerializer(serializers.Serializer):
         return value
 
 
-class ADConfigurationResponseSerializer(serializers.ModelSerializer):
+# class ADConfigurationResponseSerializer(serializers.ModelSerializer):
+#     """
+#     Serializer para resposta de configuração AD.
+#     """
+#     class Meta:
+#         model = ADConfiguration
+#         fields = [
+#             'domain_controller', 'domain_name', 'base_dn',
+#             'service_account_username', 'users_ou', 'groups_ou',
+#             'sync_enabled', 'sync_interval_minutes'
+#         ]
+
+class ADConfigurationResponseSerializer(serializers.Serializer):
     """
-    Serializer para resposta de configuração do AD (sem dados sensíveis).
+    Serializer para resposta de configuração AD (temporário).
     """
-    
-    class Meta:
-        model = ADConfiguration
-        fields = [
-            'domain_controller', 'domain_name', 'base_dn',
-            'service_account_username', 'users_ou', 'groups_ou',
-            'sync_enabled', 'sync_interval_minutes'
-        ]
+    pass
 
 
 class AgentLogSerializer(serializers.Serializer):

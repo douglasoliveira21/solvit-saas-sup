@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AuditLog, SystemConfiguration, APIKey
+from .models import AuditLog, SystemConfiguration, APIKey, PasswordHistory, LoginAttempt
 
 
 @admin.register(AuditLog)
@@ -81,3 +81,41 @@ class APIKeyAdmin(admin.ModelAdmin):
             alphabet = string.ascii_letters + string.digits
             obj.key = ''.join(secrets.choice(alphabet) for _ in range(64))
         super().save_model(request, obj, form, change)
+
+
+@admin.register(PasswordHistory)
+class PasswordHistoryAdmin(admin.ModelAdmin):
+    list_display = ['user', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['user__username', 'user__email']
+    readonly_fields = ['user', 'password_hash', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+    date_hierarchy = 'created_at'
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+
+@admin.register(LoginAttempt)
+class LoginAttemptAdmin(admin.ModelAdmin):
+    list_display = ['username', 'ip_address', 'success', 'failure_reason', 'created_at']
+    list_filter = ['success', 'created_at']
+    search_fields = ['username', 'ip_address']
+    readonly_fields = ['username', 'ip_address', 'user_agent', 'success', 'failure_reason', 'created_at', 'updated_at']
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
