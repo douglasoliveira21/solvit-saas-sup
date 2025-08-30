@@ -41,6 +41,7 @@ class HealthCheckView(APIView):
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para logs de auditoria (apenas leitura)"""
+    queryset = AuditLog.objects.all()
     serializer_class = AuditLogSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['action', 'resource_type', 'success', 'tenant']
