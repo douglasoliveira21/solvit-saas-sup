@@ -5,8 +5,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.db import connection
 from django.utils import timezone
-from .models import AuditLog, SystemConfiguration
-from .serializers import AuditLogSerializer, SystemConfigurationSerializer
+from .models import AuditLog, SystemConfiguration, APIKey
+from .serializers import AuditLogSerializer, SystemConfigurationSerializer, APIKeySerializer
 import logging
 
 logger = logging.getLogger(__name__)
@@ -119,4 +119,56 @@ class SystemConfigurationViewSet(viewsets.ModelViewSet):
         return Response({
             'key': config.key,
             'is_sensitive': config.is_sensitive
+        })
+
+
+class APIKeyViewSet(viewsets.ModelViewSet):
+    """ViewSet para gerenciamento de chaves de API"""
+    queryset = APIKey.objects.all()
+    serializer_class = APIKeySerializer
+    permission_classes = [IsAdminUser]
+    filterset_fields = ['tenant', 'is_active']
+    search_fields = ['name', 'tenant__name']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """Filtra chaves baseado nas permissões"""
+        queryset = super().get_queryset()
+        
+        # Se não é staff, mostra apenas chaves do seu tenant
+        if not self.request.user.is_staff:
+            user_tenant = getattr(self.request.user, 'tenant', None)
+            if user_tenant:
+                queryset = queryset.filter(tenant=user_tenant)
+        
+        return queryset
+    
+    def perform_create(self, serializer):
+        """Adiciona informações extras ao criar"""
+        # Se não é staff, força o tenant do usuário
+        if not self.request.user.is_staff:
+            user_tenant = getattr(self.request.user, 'tenant', None)
+            if user_tenant:
+                serializer.save(tenant=user_tenant)
+            else:
+                serializer.save()
+        else:
+            serializer.save()
+    
+    @action(detail=True, methods=['post'])
+    def regenerate(self, request, pk=None):
+        """Regenera a chave de API"""
+        api_key = self.get_object()
+        
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits
+        new_key = ''.join(secrets.choice(alphabet) for _ in range(64))
+        
+        api_key.key = new_key
+        api_key.save()
+        
+        return Response({
+            'message': 'Chave regenerada com sucesso',
+            'new_key': new_key
         })
